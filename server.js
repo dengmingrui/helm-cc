@@ -283,6 +283,18 @@ function readCheckboxes(projectCwd, docs) {
   return { done, total };
 }
 
+// Never touch macOS-protected / broad roots (avoids Documents/Downloads/iCloud/etc. privacy prompts)
+function isProtectedRoot(p) {
+  if (!p) return true;
+  const home = os.homedir();
+  if (p === home || p === '/' || p === '/Users') return true;
+  const roots = ['Documents', 'Downloads', 'Desktop', 'Music', 'Movies', 'Pictures', 'Library', 'Public', 'Applications']
+    .map(s => path.join(home, s));
+  if (roots.includes(p)) return true;
+  if (/Mobile Documents|Library\/CloudStorage|\/Library\//.test(p)) return true; // iCloud / Library
+  return false;
+}
+
 function decodePath(dirName, fallbackCwd) {
   if (fallbackCwd) return fallbackCwd;
   // best-effort: "-Users-rui-project-foo" -> "/Users/rui/project/foo"
@@ -352,9 +364,10 @@ function scanAll() {
 
     const memory = readMemory(projectDir);
     const realPath = decodePath(dirName, projCwd);
-    const skills = projCwd ? readSkills(realPath) : [];
-    const docs = projCwd ? readDocs(realPath) : [];
-    const checkboxes = projCwd ? readCheckboxes(realPath, docs) : { done: 0, total: 0 };
+    const safe = projCwd && !isProtectedRoot(realPath);   // don't read into protected/broad roots
+    const skills = safe ? readSkills(realPath) : [];
+    const docs = safe ? readDocs(realPath) : [];
+    const checkboxes = safe ? readCheckboxes(realPath, docs) : { done: 0, total: 0 };
 
     sessions.sort((a, b) => b.mtime - a.mtime);
 
