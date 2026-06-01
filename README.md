@@ -9,6 +9,10 @@
 
 <sub>made with ◢◤ by <b>存粹</b></sub>
 
+<br><br>
+
+<img src="docs/screenshot-dashboard.png" alt="纯粹CC · Claude Code 驾驶舱" width="900" />
+
 </div>
 
 ---
