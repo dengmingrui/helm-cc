@@ -1,0 +1,31 @@
+{
+  "name": "helm",
+  "productName": "Helm",
+  "version": "1.0.0",
+  "description": "Helm — Claude Code 驾驶舱：本地项目 / 需求 / 进度 / 4 层记忆 / 技能 / 文档 / Token 与剩余额度的实时 HUD，并能在多个真终端窗口里并行驱动 Claude Code。",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "node server.js",
+    "app": "electron .",
+    "dist": "electron-builder",
+    "hooks": "node add-hooks.js"
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.helm.cockpit",
+    "productName": "Helm",
+    "files": ["server.js", "add-hooks.js", "electron/**", "public/**", "package.json"],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.developer-tools"
+    }
+  }
+}

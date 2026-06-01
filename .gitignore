@@ -1,0 +1,7 @@
+node_modules/
+dist/
+build/
+*.deck-bak
+*.log
+.DS_Store
+.env

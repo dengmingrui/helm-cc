@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>终端 · Helm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
+<style>
+  :root { --bg:#070b12; --ink:#e8f0fb; --dim:#8da3bf; --faint:#56688a; --accent:#22d3ee;
+    --done:#34e0a1; --active:#ffc857; --hot:#ff5d73; --line:rgba(108,160,214,.2); }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); overflow:hidden; font-family:"Space Grotesk",system-ui,sans-serif; }
+  .aurora { position:fixed; inset:-20%; z-index:0; pointer-events:none;
+    background: radial-gradient(40% 40% at 15% 0%, rgba(34,211,238,.14), transparent 60%),
+                radial-gradient(44% 40% at 85% 8%, rgba(79,140,255,.12), transparent 60%); filter:blur(20px); }
+  .grid { position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.4;
+    background-image:linear-gradient(rgba(108,160,214,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(108,160,214,.12) 1px,transparent 1px);
+    background-size:44px 44px; mask-image:radial-gradient(120% 80% at 50% 0%,#000 30%,transparent 75%); }
+  #bar { position:relative; z-index:2; height:46px; display:flex; align-items:center; gap:12px; padding:0 18px;
+    background:linear-gradient(180deg, rgba(14,23,38,.9), rgba(7,11,18,.5)); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line); }
+  .traffic { display:inline-flex; align-items:center; gap:4px; padding:4px 7px; border-radius:8px;
+    background:rgba(0,0,0,.4); border:1px solid rgba(120,150,190,.22); }
+  .traffic i { width:9px; height:9px; border-radius:50%; transition:.2s; }
+  .traffic i.r{background:#45161b} .traffic i.y{background:#463813} .traffic i.g{background:#163a2c}
+  .traffic.on i.g { background:var(--done); box-shadow:0 0 9px var(--done); }
+  .traffic.off i.r { background:var(--hot); box-shadow:0 0 9px var(--hot); animation:blink 1s steps(2) infinite; }
+  @keyframes blink { 50%{opacity:.3} }
+  #bar .mark { width:24px; height:24px; border:1.5px solid var(--accent); border-radius:6px; position:relative;
+    box-shadow:0 0 14px rgba(34,211,238,.4) inset, 0 0 10px rgba(34,211,238,.3); flex-shrink:0; }
+  #bar .mark::before { content:""; position:absolute; inset:5px; border:1.5px solid rgba(34,211,238,.7); border-radius:2px; }
+  #bar .nm { font-size:14px; font-weight:600; color:var(--ink); white-space:nowrap; }
+  #bar .pth { font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--faint);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; letter-spacing:.02em; }
+  #bar .brand { font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.22em; color:var(--accent); opacity:.7; }
+  #term { position:absolute; top:46px; left:0; right:0; bottom:0; z-index:2; padding:10px 8px 8px 12px; }
+  #term .xterm { height:100%; }
+  #term .xterm-viewport::-webkit-scrollbar { width:9px; }
+  #term .xterm-viewport::-webkit-scrollbar-thumb { background:rgba(120,150,190,.3); border-radius:9px; }
+</style>
+</head>
+<body>
+  <div class="aurora"></div>
+  <div class="grid"></div>
+  <div id="bar">
+    <div class="mark"></div>
+    <span class="traffic off" id="led"><i class="r"></i><i class="y"></i><i class="g"></i></span>
+    <span class="nm" id="nm">终端</span>
+    <span class="pth" id="pth"></span>
+    <span class="brand">HELM</span>
+  </div>
+  <div id="term"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script>
+    const q = new URLSearchParams(location.search);
+    const cwd = q.get('cwd') || '', sessionId = q.get('sessionId') || '', isResume = q.get('resume') === '1';
+    const name = q.get('name') || cwd.split('/').filter(Boolean).pop() || '终端';
+    document.getElementById('nm').textContent = name;
+    document.getElementById('pth').textContent = cwd + (sessionId ? '  ·  ' + (isResume ? '接续 ' : '') + sessionId.slice(0, 8) : '');
+    document.title = name + ' · Helm 终端';
+    const led = document.getElementById('led');
+
+    const term = new Terminal({
+      fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+      fontSize: 13, lineHeight: 1.15, cursorBlink: true, scrollback: 8000,
+      theme: { background: '#070b12', foreground: '#e8f0fb', cursor: '#22d3ee',
+        selectionBackground: 'rgba(34,211,238,.3)', brightBlack: '#56688a',
+        red: '#ff5d73', green: '#34e0a1', yellow: '#ffc857', blue: '#4f8cff',
+        magenta: '#9b8cff', cyan: '#22d3ee', white: '#e8f0fb', brightWhite: '#ffffff' },
+    });
+    const fit = new FitAddon.FitAddon();
+    term.loadAddon(fit); term.open(document.getElementById('term')); fit.fit();
+
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const params = new URLSearchParams({ cwd, cols: term.cols, rows: term.rows });
+    if (sessionId) { params.set('sessionId', sessionId); params.set('resume', isResume ? '1' : '0'); }
+    const ws = new WebSocket(`${proto}://${location.host}/api/term?${params.toString()}`);
+    ws.onopen = () => { led.classList.remove('off'); led.classList.add('on'); };
+    ws.onclose = () => { led.classList.remove('on'); led.classList.add('off'); };
+    ws.onerror = () => term.write('\r\n\x1b[31m[连接错误]\x1b[0m\r\n');
+    ws.onmessage = (e) => {
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      if (m.t === 'o') term.write(m.d);
+      else if (m.t === 'state') { led.className = 'traffic ' + (m.state === 'idle' ? 'on' : m.state === 'busy' ? 'off' : ''); }
+      else if (m.t === 'exit') { term.write(`\r\n\x1b[33m[claude 已退出 · code ${m.code}]\x1b[0m\r\n`); led.classList.add('off'); }
+      else if (m.t === 'err') term.write(`\r\n\x1b[31m[${m.m}]\x1b[0m\r\n`);
+    };
+    term.onData((d) => { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'i', d })); });
+    const refit = () => { fit.fit(); if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'r', cols: term.cols, rows: term.rows })); };
+    new ResizeObserver(refit).observe(document.getElementById('term'));
+    window.addEventListener('resize', refit);
+    term.focus();
+  </script>
+</body>
+</html>

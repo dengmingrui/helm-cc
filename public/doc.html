@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>文档 · Helm</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+<style>
+  body { padding: 0; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 40px 24px 80px; }
+  .doc-title { font-family: var(--font-mono); font-size: 12px; color: var(--ink-faint); margin-bottom: 24px; word-break: break-all; }
+</style>
+</head>
+<body>
+  <div class="bg-aurora"></div>
+  <div class="bg-grid"></div>
+  <div class="wrap">
+    <div class="doc-title" id="t">载入中…</div>
+    <div class="md-body" id="md"></div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+  <script>
+    const q = new URLSearchParams(location.search);
+    const cwd = q.get('cwd') || '', rel = q.get('rel') || '';
+    document.getElementById('t').textContent = rel;
+    document.title = (rel.split('/').pop() || '文档') + ' · 文档';
+    fetch(`/api/doc?cwd=${encodeURIComponent(cwd)}&rel=${encodeURIComponent(rel)}`)
+      .then(r => r.json())
+      .then(j => {
+        if (!j.ok) throw new Error(j.error);
+        document.getElementById('md').innerHTML = (typeof marked !== 'undefined') ? marked.parse(j.text)
+          : '<pre>' + j.text.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])) + '</pre>';
+      })
+      .catch(e => { document.getElementById('md').innerHTML = '<p style="color:#ff5d73">载入失败：' + e.message + '</p>'; });
+  </script>
+</body>
+</html>
