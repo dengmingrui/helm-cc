@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Helm · Claude Code 驾驶舱</title>
+<title>纯粹CC · Claude Code 驾驶舱</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
+<link rel="stylesheet" href="vendor/xterm.min.css" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -22,12 +22,13 @@
       <div class="brand">
         <div class="mark"></div>
         <div>
-          <h1>HELM</h1>
-          <div class="sub">CLAUDE CODE 驾驶舱 · 多会话控制</div>
+          <h1>纯粹CC</h1>
+          <div class="sub">CLAUDE CODE 驾驶舱 · 多会话控制 · by 存粹</div>
         </div>
       </div>
       <div class="spacer"></div>
       <div class="live"><span class="dot"></span><span id="live-clock">已同步</span></div>
+      <button class="btn-refresh" id="hooks-btn" title="精确状态追踪（红绿灯）· 会修改 ~/.claude/settings.json">⦿ 状态</button>
       <button class="btn-refresh" id="theme-toggle" title="切换亮/暗主题" style="padding:8px 12px">
         <span id="theme-ico">☀</span>
       </button>
@@ -63,12 +64,11 @@
   </aside>
 
   <div id="dock"></div>
-  <div id="mindock"></div>
   <div class="toast" id="toast"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="vendor/marked.min.js"></script>
+  <script src="vendor/xterm.min.js"></script>
+  <script src="vendor/addon-fit.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

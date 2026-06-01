@@ -629,19 +629,26 @@ function setLed(ctx, state) {
   if (ctx.traffic) ctx.traffic.dataset.state = state;
 }
 
-// minimize/restore a floating pane into the shared bottom mindock
+// minimize → a small floating pill stacked at bottom-right (but freely draggable);
+// restore → back to its previous size/position.
+const MIN_W = 210;
+function minSlot() {
+  const n = [...$('#dock').children].filter(e => e.classList.contains('min')).length;
+  return { left: Math.max(12, innerWidth - MIN_W - 14), top: Math.max(12, innerHeight - 54 - n * 46) };
+}
 function toggleMinPane(pane) {
   if (pane.classList.contains('min')) {
     pane.classList.remove('min');
-    $('#dock').appendChild(pane);
     const s = pane._savedPos;
     if (s) { pane.style.left = s.left; pane.style.top = s.top; pane.style.width = s.width; pane.style.height = s.height; }
     bringToFront(pane);
   } else {
     pane._savedPos = { left: pane.style.left, top: pane.style.top, width: pane.style.width, height: pane.style.height };
-    pane.style.left = pane.style.top = pane.style.width = pane.style.height = '';
     pane.classList.add('min');
-    $('#mindock').appendChild(pane);
+    const slot = minSlot();
+    pane.style.width = ''; pane.style.height = '';
+    pane.style.left = slot.left + 'px'; pane.style.top = slot.top + 'px';
+    bringToFront(pane);
   }
 }
 
@@ -675,7 +682,17 @@ function evalStatus(ctx) {
   applyState(ctx, state);
 }
 
+function openNativeSession(project, resumeSessionId, force) {
+  const sid = resumeSessionId || (window.crypto && crypto.randomUUID ? crypto.randomUUID() : 'x' + Date.now().toString(16));
+  window.helm.openSession({
+    key: project.realPath, cwd: project.realPath, name: project.name,
+    sessionId: sid, resume: !!resumeSessionId, force: !!force,
+  }).then(r => { if (r && r.focused) toast(`「${project.name}」已有窗口，已切到前台`); })
+    .catch(e => toast('开窗失败：' + (e && e.message || e)));
+}
+
 function openChat(project, resumeSessionId, force) {
+  if (window.helm && window.helm.isElectron) return openNativeSession(project, resumeSessionId, force);
   if (typeof Terminal === 'undefined' || typeof FitAddon === 'undefined') {
     toast('终端组件 xterm.js 未加载，请检查网络后刷新'); return;
   }
@@ -699,7 +716,7 @@ function openChat(project, resumeSessionId, force) {
       ${project.progress != null ? `<span class="term-prog" title="完成进度">${project.progress}%</span>` : ''}
       <span class="term-tag">${resumeSessionId ? '接续 ' + esc(resumeSessionId.slice(0, 8)) : '新终端'}</span>
       <button class="dc" title="项目文档列表">▤</button>
-      <button class="po" title="弹出为独立窗口/页面">⇱</button>
+      <button class="po" title="脱离为独立窗口（可拖到桌面/其他显示器）">⇱</button>
       <button class="nw" title="新终端（不接续历史）">＋</button>
       <button class="mn" title="收起/展开">–</button>
       <button class="x" title="关闭">×</button>
@@ -713,8 +730,8 @@ function openChat(project, resumeSessionId, force) {
   $('#dock').appendChild(pane);
   // float at a staggered position; draggable + resizable
   const n = TERMS.size;
-  pane.style.left = Math.min(innerWidth - 580, 60 + n * 34) + 'px';
-  pane.style.top = Math.min(innerHeight - 200, 90 + n * 34) + 'px';
+  pane.style.left = Math.max(12, Math.min(innerWidth - 800, 60 + n * 34)) + 'px';
+  pane.style.top = Math.max(12, Math.min(innerHeight - 200, 90 + n * 34)) + 'px';
   bringToFront(pane);
   const host = pane.querySelector('.cpane-term');
   const traffic = pane.querySelector('.traffic');
@@ -800,7 +817,6 @@ function bringToFront(pane) { pane.style.zIndex = String(++zTop); }
 function makeDraggable(pane, handle) {
   handle.addEventListener('pointerdown', (e) => {
     if (e.target.closest('button')) return; // don't drag when hitting a button
-    if (pane.classList.contains('min')) { toggleMinPane(pane); return; } // click pill to restore
     e.preventDefault();
     const r = pane.getBoundingClientRect();
     const ox = e.clientX - r.left, oy = e.clientY - r.top;
@@ -813,6 +829,7 @@ function makeDraggable(pane, handle) {
     document.addEventListener('pointermove', move);
     document.addEventListener('pointerup', up);
   });
+  handle.addEventListener('dblclick', () => { if (pane.classList.contains('min')) toggleMinPane(pane); });
 }
 
 function makeResizable(pane, handle, onResize) {
@@ -850,6 +867,7 @@ function applyTheme(theme) {
   else document.documentElement.removeAttribute('data-theme');
   $('#theme-ico').textContent = theme === 'light' ? '☾' : '☀';
 }
+if (/Electron/i.test(navigator.userAgent)) document.documentElement.classList.add('electron');
 let THEME = localStorage.getItem('deck-theme') || 'dark';
 applyTheme(THEME);
 $('#theme-toggle').onclick = () => {
@@ -857,6 +875,31 @@ $('#theme-toggle').onclick = () => {
   localStorage.setItem('deck-theme', THEME);
   applyTheme(THEME);
 };
+
+// ---------- status hooks one-click toggle ----------
+async function refreshHookBtn() {
+  const b = $('#hooks-btn'); if (!b) return;
+  try {
+    const j = await (await fetch('/api/hooks/status')).json();
+    b.dataset.on = j.installed ? '1' : '0';
+    b.innerHTML = j.installed ? '⦿ 状态: 精确' : '○ 状态: 推断';
+    b.style.color = j.installed ? 'var(--done)' : '';
+    b.style.borderColor = j.installed ? 'var(--done)' : '';
+  } catch {}
+}
+$('#hooks-btn') && ($('#hooks-btn').onclick = async () => {
+  const on = $('#hooks-btn').dataset.on === '1';
+  const msg = on
+    ? '关闭精确状态追踪？将从 ~/.claude/settings.json 移除相关 hooks（红绿灯回退到推断模式）。'
+    : '启用精确状态追踪？会在 ~/.claude/settings.json 写入 5 个 hook（已自动备份，可随时关闭）。\n红绿灯会变成由 Claude 事件驱动，更准。';
+  if (!confirm(msg)) return;
+  try {
+    const j = await (await fetch('/api/hooks/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enable: !on }) })).json();
+    if (!j.ok) throw new Error(j.error);
+    toast(j.installed ? '已启用精确状态（新开的会话生效）' : '已关闭，回退到推断模式');
+    refreshHookBtn();
+  } catch (e) { toast('操作失败：' + e.message); }
+});
 
 // ---------- wiring ----------
 $('#refresh').onclick = () => load(false);
@@ -871,3 +914,4 @@ $('#filters').addEventListener('click', e => {
 
 // No auto-refresh: the page stays stable. Data updates only when you click 重新扫描.
 load(true);
+refreshHookBtn();

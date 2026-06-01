@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>终端 · Helm</title>
+<title>终端 · 纯粹CC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
+<link rel="stylesheet" href="vendor/xterm.min.css" />
 <style>
   :root { --bg:#070b12; --ink:#e8f0fb; --dim:#8da3bf; --faint:#56688a; --accent:#22d3ee;
     --done:#34e0a1; --active:#ffc857; --hot:#ff5d73; --line:rgba(108,160,214,.2); }
@@ -18,15 +18,24 @@
   .grid { position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.4;
     background-image:linear-gradient(rgba(108,160,214,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(108,160,214,.12) 1px,transparent 1px);
     background-size:44px 44px; mask-image:radial-gradient(120% 80% at 50% 0%,#000 30%,transparent 75%); }
-  #bar { position:relative; z-index:2; height:46px; display:flex; align-items:center; gap:12px; padding:0 18px;
-    background:linear-gradient(180deg, rgba(14,23,38,.9), rgba(7,11,18,.5)); backdrop-filter:blur(10px);
-    border-bottom:1px solid var(--line); }
+  #bar { position:relative; z-index:2; height:46px; display:flex; align-items:center; gap:12px; padding:0 10px 0 16px;
+    background:linear-gradient(180deg, rgba(14,23,38,.95), rgba(7,11,18,.6)); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line); -webkit-app-region:drag; }
+  #bar .wbtn { -webkit-app-region:no-drag; width:28px; height:28px; flex-shrink:0; border:1px solid var(--line);
+    border-radius:7px; background:transparent; color:var(--dim); cursor:pointer; font-size:15px; line-height:1; }
+  #bar .wbtn:hover { border-color:rgba(120,180,255,.5); color:var(--ink); }
+  #bar .wbtn.close:hover { border-color:var(--hot); color:var(--hot); }
+  #term { -webkit-app-region:no-drag; }
+  body.min #term { display:none; }
+  body.min #bar { border-bottom:0; }
   .traffic { display:inline-flex; align-items:center; gap:4px; padding:4px 7px; border-radius:8px;
     background:rgba(0,0,0,.4); border:1px solid rgba(120,150,190,.22); }
   .traffic i { width:9px; height:9px; border-radius:50%; transition:.2s; }
   .traffic i.r{background:#45161b} .traffic i.y{background:#463813} .traffic i.g{background:#163a2c}
-  .traffic.on i.g { background:var(--done); box-shadow:0 0 9px var(--done); }
-  .traffic.off i.r { background:var(--hot); box-shadow:0 0 9px var(--hot); animation:blink 1s steps(2) infinite; }
+  .traffic[data-state="idle"] i.g { background:var(--done); box-shadow:0 0 9px var(--done); }
+  .traffic[data-state="busy"] i.r { background:var(--hot); box-shadow:0 0 9px var(--hot); animation:blink 1s steps(2) infinite; }
+  .traffic[data-state="wait"] i.y { background:var(--active); box-shadow:0 0 10px var(--active); animation:blink 1.1s ease-in-out infinite; }
+  .traffic[data-state="off"] i { background:#2a3242; }
   @keyframes blink { 50%{opacity:.3} }
   #bar .mark { width:24px; height:24px; border:1.5px solid var(--accent); border-radius:6px; position:relative;
     box-shadow:0 0 14px rgba(34,211,238,.4) inset, 0 0 10px rgba(34,211,238,.3); flex-shrink:0; }
@@ -46,23 +55,52 @@
   <div class="grid"></div>
   <div id="bar">
     <div class="mark"></div>
-    <span class="traffic off" id="led"><i class="r"></i><i class="y"></i><i class="g"></i></span>
+    <span class="traffic" data-state="off" id="led" title="红=进行中 黄=等确认 绿=空闲"><i class="r"></i><i class="y"></i><i class="g"></i></span>
     <span class="nm" id="nm">终端</span>
     <span class="pth" id="pth"></span>
-    <span class="brand">HELM</span>
+    <span class="brand">纯粹CC</span>
+    <button class="wbtn" id="btnMin" title="最小化到右下角">–</button>
+    <button class="wbtn close" id="btnClose" title="关闭">×</button>
   </div>
   <div id="term"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="vendor/xterm.min.js"></script>
+  <script src="vendor/addon-fit.min.js"></script>
   <script>
+    window.onerror = function (msg, src, line, col, err) {
+      var d = document.getElementById('term') || document.body;
+      d.innerHTML = '<pre style="color:#ff5d73;white-space:pre-wrap;padding:20px;font:12px monospace;line-height:1.5">JS 错误：' +
+        msg + '\n' + (src || '') + ':' + line + ':' + col + '\n\n' + ((err && err.stack) || '') + '</pre>';
+      console.log('ONERROR ' + msg + ' @ ' + src + ':' + line);
+    };
+    if (/Electron/i.test(navigator.userAgent)) document.documentElement.classList.add('electron');
     const q = new URLSearchParams(location.search);
     const cwd = q.get('cwd') || '', sessionId = q.get('sessionId') || '', isResume = q.get('resume') === '1';
     const name = q.get('name') || cwd.split('/').filter(Boolean).pop() || '终端';
     document.getElementById('nm').textContent = name;
     document.getElementById('pth').textContent = cwd + (sessionId ? '  ·  ' + (isResume ? '接续 ' : '') + sessionId.slice(0, 8) : '');
-    document.title = name + ' · Helm 终端';
+    document.title = name + ' · 纯粹CC 终端';
     const led = document.getElementById('led');
+    const hw = window.helm;   // NOTE: do NOT name this `helm` — contextBridge exposes a GLOBAL `helm`, redeclaring collides
+
+    // WINDOW CONTROLS FIRST — so close/minimize always work even if the terminal fails to init
+    (function () {
+      const btnMin = document.getElementById('btnMin'), bar = document.getElementById('bar');
+      let minimized = false;
+      window.__setMin = (on) => { minimized = on; document.body.classList.toggle('min', on);
+        btnMin.textContent = on ? '▢' : '–'; btnMin.title = on ? '还原' : '最小化到右下角'; };
+      btnMin.onclick = () => {
+        if (!hw) { document.title = '(最小化需桌面版) ' + name; return; }
+        if (!minimized) { hw.minimize(); window.__setMin(true); } else { hw.restore(); window.__setMin(false); }
+      };
+      bar.addEventListener('dblclick', (e) => { if (minimized && hw && !e.target.closest('button')) { hw.restore(); window.__setMin(false); } });
+      document.getElementById('btnClose').onclick = () => { if (hw) hw.close(); else window.close(); };
+    })();
+
+    if (typeof Terminal === 'undefined' || typeof FitAddon === 'undefined') {
+      document.getElementById('term').innerHTML = '<div style="color:#ff5d73;font-family:monospace;padding:24px;line-height:1.6">终端组件 (xterm) 加载失败。<br>请确认 public/vendor/ 下有 xterm.min.js，或重启应用。<br>你仍可点右上角 × 关闭本窗口。</div>';
+      throw new Error('xterm not loaded');
+    }
 
     const term = new Terminal({
       fontFamily: '"JetBrains Mono", ui-monospace, monospace',
@@ -74,21 +112,29 @@
     });
     const fit = new FitAddon.FitAddon();
     term.loadAddon(fit); term.open(document.getElementById('term')); fit.fit();
+    term.write('\x1b[90m  纯粹CC · 正在连接 Claude Code … (' + (cwd || '~') + ')\x1b[0m\r\n');
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const params = new URLSearchParams({ cwd, cols: term.cols, rows: term.rows });
     if (sessionId) { params.set('sessionId', sessionId); params.set('resume', isResume ? '1' : '0'); }
     const ws = new WebSocket(`${proto}://${location.host}/api/term?${params.toString()}`);
-    ws.onopen = () => { led.classList.remove('off'); led.classList.add('on'); };
-    ws.onclose = () => { led.classList.remove('on'); led.classList.add('off'); };
+    let lastData = 0, hookDriven = false, hookAt = 0, exited = false;
+    ws.onopen = () => { led.dataset.state = 'idle'; };
+    ws.onclose = () => { if (!exited) led.dataset.state = 'off'; };
     ws.onerror = () => term.write('\r\n\x1b[31m[连接错误]\x1b[0m\r\n');
     ws.onmessage = (e) => {
       let m; try { m = JSON.parse(e.data); } catch { return; }
-      if (m.t === 'o') term.write(m.d);
-      else if (m.t === 'state') { led.className = 'traffic ' + (m.state === 'idle' ? 'on' : m.state === 'busy' ? 'off' : ''); }
-      else if (m.t === 'exit') { term.write(`\r\n\x1b[33m[claude 已退出 · code ${m.code}]\x1b[0m\r\n`); led.classList.add('off'); }
+      if (m.t === 'o') { term.write(m.d); lastData = Date.now(); }
+      else if (m.t === 'state') { hookDriven = true; hookAt = Date.now(); led.dataset.state = m.state; }
+      else if (m.t === 'exit') { term.write(`\r\n\x1b[33m[claude 已退出 · code ${m.code}]\x1b[0m\r\n`); exited = true; led.dataset.state = 'off'; }
       else if (m.t === 'err') term.write(`\r\n\x1b[31m[${m.m}]\x1b[0m\r\n`);
     };
+    // activity-based fallback when hooks aren't installed
+    setInterval(() => {
+      if (exited || ws.readyState !== 1) return;
+      if (hookDriven && Date.now() - hookAt < 600000) return;
+      led.dataset.state = (Date.now() - lastData < 1500) ? 'busy' : 'idle';
+    }, 600);
     term.onData((d) => { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'i', d })); });
     const refit = () => { fit.fit(); if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'r', cols: term.cols, rows: term.rows })); };
     new ResizeObserver(refit).observe(document.getElementById('term'));

@@ -24,6 +24,38 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const PORT = process.env.PORT || 4317;
 
 const MEMORY_TYPES = ['user', 'feedback', 'project', 'reference'];
+const SETTINGS_FILE = path.join(CLAUDE_DIR, 'settings.json');
+const HOOK_KEYS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Notification', 'Stop'];
+
+// ---------- status hooks: one-click install/remove from the dashboard ----------
+function hookCmd() {
+  return `curl -s --max-time 1 -X POST http://localhost:${PORT}/api/hook -H 'Content-Type: application/json' --data-binary @- >/dev/null 2>&1 || true`;
+}
+function hooksInstalled() {
+  try {
+    const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+    return !!(s.hooks && HOOK_KEYS.some(k => (s.hooks[k] || []).some(g => (g.hooks || []).some(h => (h.command || '').includes('/api/hook')))));
+  } catch { return false; }
+}
+function setHooks(enable) {
+  let s = {};
+  try { s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); } catch {}
+  const bak = SETTINGS_FILE + '.deck-bak';
+  try { if (!fs.existsSync(bak)) fs.writeFileSync(bak, JSON.stringify(s, null, 2)); } catch {}
+  s.hooks = s.hooks || {};
+  const clean = (k) => { if (s.hooks[k]) { s.hooks[k] = s.hooks[k].filter(g => !(g.hooks || []).some(h => (h.command || '').includes('/api/hook'))); if (!s.hooks[k].length) delete s.hooks[k]; } };
+  HOOK_KEYS.forEach(clean);
+  if (enable) {
+    const cmd = hookCmd();
+    const one = () => [{ hooks: [{ type: 'command', command: cmd }] }];
+    const mat = () => [{ matcher: '*', hooks: [{ type: 'command', command: cmd }] }];
+    s.hooks.UserPromptSubmit = one(); s.hooks.Notification = one(); s.hooks.Stop = one();
+    s.hooks.PreToolUse = mat(); s.hooks.PostToolUse = mat();
+  }
+  if (Object.keys(s.hooks).length === 0) delete s.hooks;
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(s, null, 2) + '\n');
+  return hooksInstalled();
+}
 
 // ---------- helpers ----------
 
@@ -440,7 +472,25 @@ function deleteSession(dirName, sessionId) {
 //  Live chat manager — drive real Claude Code sessions per pane
 // ===========================================================
 
-const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude';
+// Resolve the claude binary robustly. A macOS app launched from Finder does NOT
+// inherit the shell PATH, so `claude` alone won't be found — search common locations.
+function resolveClaudeBin() {
+  if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN;
+  const candidates = [
+    '/opt/homebrew/bin/claude', '/usr/local/bin/claude',
+    path.join(os.homedir(), '.claude/local/claude'),
+    path.join(os.homedir(), '.npm-global/bin/claude'),
+    path.join(os.homedir(), '.local/bin/claude'),
+    path.join(os.homedir(), '.bun/bin/claude'),
+  ];
+  for (const c of candidates) { try { if (fs.existsSync(c)) return c; } catch {} }
+  try {
+    const out = require('child_process').execSync('zsh -lc "command -v claude" 2>/dev/null || bash -lc "command -v claude" 2>/dev/null', { encoding: 'utf8' }).trim();
+    if (out && fs.existsSync(out.split('\n').pop().trim())) return out.split('\n').pop().trim();
+  } catch {}
+  return 'claude';
+}
+const CLAUDE_BIN = resolveClaudeBin();
 const panes = new Map(); // paneId -> pane
 const terminals = new Map(); // sessionId -> { ws } : live PTY terminals, keyed by claude session id
 
@@ -663,6 +713,24 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (route === '/api/hooks/status') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ installed: hooksInstalled(), settingsFile: SETTINGS_FILE }));
+    return;
+  }
+  if (route === '/api/hooks/toggle' && req.method === 'POST') {
+    try {
+      const { enable } = await readBody(req);
+      const installed = setHooks(!!enable);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, installed }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: String(e.message || e) }));
+    }
+    return;
+  }
+
   if (route === '/api/hook' && req.method === 'POST') {
     try {
       const p = await readBody(req);
@@ -800,7 +868,7 @@ if (pty && WebSocketServer) {
 
 if (require.main === module) {
   server.listen(PORT, () => {
-    console.log(`\n  ◢◤ HELM · Claude Code 驾驶舱`);
+    console.log(`\n  ◢◤ 纯粹CC · Claude Code 驾驶舱`);
     console.log(`  live at  http://localhost:${PORT}`);
     console.log(`  terminal: ${pty && WebSocketServer ? 'enabled (PTY+WS)' : 'DISABLED — run: npm install node-pty ws'}\n`);
     console.log(`  scanning ${PROJECTS_DIR}\n`);

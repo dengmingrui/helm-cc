@@ -1,8 +1,9 @@
 {
-  "name": "helm",
-  "productName": "Helm",
+  "name": "chuncui-cc",
+  "productName": "纯粹CC",
   "version": "1.0.0",
-  "description": "Helm — Claude Code 驾驶舱：本地项目 / 需求 / 进度 / 4 层记忆 / 技能 / 文档 / Token 与剩余额度的实时 HUD，并能在多个真终端窗口里并行驱动 Claude Code。",
+  "description": "纯粹CC — Claude Code 驾驶舱：本地项目 / 需求 / 进度 / 4 层记忆 / 技能 / 文档 / Token 与剩余额度的实时 HUD，并能在多个真终端窗口里并行驱动 Claude Code。",
+  "author": "存粹",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -20,12 +21,16 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "com.helm.cockpit",
-    "productName": "Helm",
-    "files": ["server.js", "add-hooks.js", "electron/**", "public/**", "package.json"],
+    "appId": "com.chuncui.cc",
+    "productName": "纯粹CC",
+    "asar": false,
+    "npmRebuild": true,
+    "files": ["server.js", "add-hooks.js", "electron/**", "public/**", "node_modules/**", "package.json"],
     "mac": {
-      "target": "dmg",
-      "category": "public.app-category.developer-tools"
-    }
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.developer-tools",
+      "identity": null
+    },
+    "dmg": { "title": "纯粹CC ${version}" }
   }
 }

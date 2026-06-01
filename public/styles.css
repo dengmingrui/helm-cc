@@ -69,7 +69,16 @@
 
 * { box-sizing: border-box; }
 
-html, body { margin: 0; padding: 0; height: 100%; }
+html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); }
+
+/* dark, slim global scrollbars (kills the ugly white system bar) */
+* { scrollbar-width: thin; scrollbar-color: rgba(120,150,190,.32) transparent; }
+::-webkit-scrollbar { width: 11px; height: 11px; background: transparent; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(120,150,190,.28); border-radius: 10px;
+  border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(120,150,190,.5); background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
 
 body {
   font-family: var(--font-display);
@@ -516,16 +525,17 @@ body {
 .traffic[data-state="idle"] i.tr-g { background: var(--done); box-shadow: 0 0 8px var(--done); }
 .traffic[data-state="off"] i { background: #2a3242; box-shadow: none; }
 
-/* minimized panes stack here as compact pills */
-#mindock { position: fixed; right: 12px; bottom: 12px; z-index: 85; display: flex; flex-direction: column-reverse;
-  gap: 8px; max-height: 86vh; pointer-events: none; align-items: flex-end; }
-#mindock > * { pointer-events: auto; }
-.cpane.min { position: static !important; width: auto !important; min-width: 0 !important; height: auto !important;
-  max-height: none; border-radius: 10px; flex-shrink: 0; animation: none; box-shadow: 0 10px 26px -12px rgba(0,0,0,.7); }
-.cpane.min .cpane-head { cursor: pointer; padding: 8px 10px; background: linear-gradient(180deg, rgba(34,211,238,.05), transparent); }
-.cpane.min .pn { max-width: 150px; }
+/* minimized = small floating pill (stacks bottom-right by default, but freely draggable) */
+.cpane.min { width: 200px !important; height: auto !important; max-height: none;
+  border-radius: 10px; animation: none; box-shadow: 0 10px 26px -12px rgba(0,0,0,.7); }
+.cpane.min .cpane-head { cursor: move; padding: 8px 10px; background: linear-gradient(180deg, rgba(34,211,238,.06), transparent); }
+.cpane.min .pn { max-width: 104px; }
 .cpane.min .term-tag, .cpane.min .dc, .cpane.min .po, .cpane.min .nw { display: none; }
-.cpane.min .mn { transform: none; }
+
+/* desktop app: make the top bar drag the OS window (ignored in a browser) */
+.topbar { -webkit-app-region: drag; }
+.topbar button, .topbar .chip-filter, .topbar select, .topbar .live { -webkit-app-region: no-drag; }
+:root.electron .topbar { padding-left: 78px; }   /* clear the macOS traffic-light buttons */
 .cpane-head select { font-family: var(--font-mono); font-size: 10px; background: var(--panel-solid);
   color: var(--ink-dim); border: 1px solid var(--line); border-radius: 6px; padding: 3px 5px; cursor: pointer; }
 .cpane-head button { width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 7px;
@@ -543,10 +553,10 @@ body {
 
 /* floating, draggable, resizable windows (terminal + doc reader) */
 .cpane.term, .cpane.docwin {
-  position: fixed; width: 560px; height: 480px; max-height: none;
+  position: fixed; width: 780px; height: 480px; max-height: none;
   border-radius: 14px; flex-shrink: 0;
 }
-.cpane.docwin { width: 600px; height: 540px; }
+.cpane.docwin { width: 640px; height: 560px; }
 .cpane.term .cpane-head, .cpane.docwin .cpane-head { cursor: move; }
 .cpane.term.dragging, .cpane.docwin.dragging { user-select: none; }
 .cpane.term.dragging .xterm { pointer-events: none; }
